@@ -9,7 +9,7 @@ def env(key: str, required: bool = False) -> str:
     return val
 
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", required=True)
-HF_TOKEN = env("HF_TOKEN", required=True)
+HF_TOKEN = env("HF_TOKEN", required=True)  # ← Hugging Face token
 SUPABASE_URL = env("SUPABASE_URL", required=True)
 SUPABASE_KEY = env("SUPABASE_KEY", required=True)
 
