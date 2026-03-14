@@ -1,21 +1,15 @@
+# config.py - clean version
 import os
 
 def env(key: str, required: bool = False) -> str:
     val = os.getenv(key, "")
-    if val:
-        val = val.strip()
-    if required and not val:
-        raise ValueError(f"{key} is required")
-    return val
+    return val.strip() if val else ("", raise ValueError(f"{key} missing"))[required]
 
-TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", required=True)
-HF_TOKEN = env("HF_TOKEN", required=True)
-SUPABASE_URL = env("SUPABASE_URL", required=True)
-SUPABASE_KEY = env("SUPABASE_KEY", required=True)
+TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", True)
+HF_TOKEN = env("HF_TOKEN", True)
+SUPABASE_URL = env("SUPABASE_URL", True)
+SUPABASE_KEY = env("SUPABASE_KEY", True)
 
-# Working free models:
-HF_MODEL = "microsoft/Phi-3-mini-4k-instruct"
-# Alternative: HF_MODEL = "google/gemma-2-9b-it"
-# Alternative: HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"
-
-SYSTEM_PROMPT = "You are Mybuddy, a friendly Telegram AI assistant. Keep replies short and helpful."
+# Model from env or default (also stripped)
+HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.2-1B-Instruct").strip()
+SYSTEM_PROMPT = "You are Mybuddy. Be short and helpful."
