@@ -33,18 +33,34 @@ def send_message(chat_id: int, text: str):
 
 def ask_huggingface(prompt: str) -> str:
     try:
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        payload = {
-            "inputs": f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
-            "parameters": {"max_new_tokens": 500, "temperature": 0.7, "return_full_text": False}
+        # ✅ New Hugging Face router endpoint
+        url = f"https://router.huggingface.co/{HF_MODEL}/v1/chat/completions"
+        
+        headers = {
+            "Authorization": f"Bearer {HF_TOKEN}",
+            "Content-Type": "application/json"
         }
-        r = requests.post(HF_URL, headers=headers, json=payload, timeout=30)
+        
+        payload = {
+            "model": HF_MODEL,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 500,
+            "temperature": 0.7
+        }
+        
+        r = requests.post(url, headers=headers, json=payload, timeout=30)
+        
         if r.status_code == 200:
-            result = r.json()
-            if isinstance(result, list) and result:
-                return result[0].get("generated_text", "No response").strip()
+            data = r.json()
+            if data.get("choices"):
+                return data["choices"][0]["message"]["content"].strip()
+        
         print(f"HF Error {r.status_code}: {r.text[:200]}")
-        return "AI is loading. Please try again in 30 seconds."
+        return "AI is busy. Please try again."
+        
     except Exception as e:
         print(f"HF Exception: {e}")
         return "AI temporarily unavailable."
