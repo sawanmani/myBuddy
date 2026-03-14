@@ -14,5 +14,5 @@ A Telegram bot powered by Qwen3 via OpenRouter, with memory logging via Supabase
 
 ### 1. Fork/Clone This Repo
 ```bash
-git clone https://github.com/yourusername/sawan-buddy.git
+git clone https://github.com/sawanmani/mybuddy.git
 cd sawan-buddy
