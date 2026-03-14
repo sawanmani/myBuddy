@@ -49,7 +49,7 @@ def ask_openrouter(prompt: str) -> str:
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
             "HTTP-Referer": os.getenv("RENDER_EXTERNAL_URL", "https://huggingface.co"),
-            "X-Title": "Sawan Buddy",
+            "X-Title": "Mybuddy",
         }
         
         payload = {
@@ -61,11 +61,11 @@ def ask_openrouter(prompt: str) -> str:
             "max_tokens": 500,
             "temperature": 0.7,
         }
-        
+        rint(f"🤖 Calling OpenRouter model: {MODEL}")
         r = requests.post(url, headers=headers, json=payload, timeout=30)
         
         if r.status_code != 200:
-            print(f"⚠️ OpenRouter {r.status_code}: {r.text[:200]}")
+            print(f"⚠️ OpenRouter {r.status_code}: {r.text[:300]}")
             return "Sorry, the AI service is busy. Please try again in a moment."
         
         data = r.json()
@@ -84,7 +84,7 @@ def ask_openrouter(prompt: str) -> str:
         return "Network error connecting to AI service."
     except Exception as e:
         print(f"❌ Unexpected error: {type(e).__name__}: {e}")
-        return "Something went wrong. Please try again."
+        return "AI is temporarily unavailable."
 
 
 # ---------- Supabase Memory ----------
