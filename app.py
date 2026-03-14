@@ -15,6 +15,8 @@ from config import (
 
 app = FastAPI()
 SUPABASE_TABLE = "chat_logs"
+
+# ✅ FIXED: No spaces in URL construction
 TG_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 
@@ -39,52 +41,77 @@ def send_message(chat_id: int, text: str):
     })
 
 
-# ---------- AI Call: OpenRouter with Qwen3 ----------
+# ---------- AI Call: OpenRouter with Fallback ----------
 def ask_openrouter(prompt: str) -> str:
-    """Call OpenRouter API using Qwen3 model"""
-    try:
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": os.getenv("RENDER_EXTERNAL_URL", "https://huggingface.co"),
-            "X-Title": "Mybuddy",
-        }
-        
-        payload = {
-            "model": MODEL,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "max_tokens": 500,
-            "temperature": 0.7,
-        }
-        rint(f"🤖 Calling OpenRouter model: {MODEL}")
-        r = requests.post(url, headers=headers, json=payload, timeout=30)
-        
-        if r.status_code != 200:
-            print(f"⚠️ OpenRouter {r.status_code}: {r.text[:300]}")
-            return "Sorry, the AI service is busy. Please try again in a moment."
-        
-        data = r.json()
-        
-        if "choices" not in data or not data["choices"]:
-            print(f"⚠️ No choices in response: {data}")
-            return "AI service returned an empty response."
-        
-        return data["choices"][0]["message"]["content"].strip()
-        
-    except requests.exceptions.Timeout:
-        print("❌ OpenRouter timeout")
-        return "The AI is taking too long. Please try again."
-    except requests.exceptions.RequestException as e:
-        print(f"❌ OpenRouter request error: {e}")
-        return "Network error connecting to AI service."
-    except Exception as e:
-        print(f"❌ Unexpected error: {type(e).__name__}: {e}")
-        return "AI is temporarily unavailable."
+    """Call OpenRouter API with automatic fallback to multiple models"""
+    
+    # List of models to try (most reliable first)
+    models_to_try = [
+        "google/gemma-2-9b-it:free",
+        "mistralai/mistral-7b-instruct:free",
+        "meta-llama/llama-3.2-3b-instruct:free",
+        "venice/uncensored:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+    ]
+    
+    # ✅ FIXED: No trailing spaces in URL
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    
+    # ✅ FIXED: Clean Referer header (no trailing spaces)
+    referer = os.getenv("RENDER_EXTERNAL_URL", "https://huggingface.co").strip()
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": referer,
+        "X-Title": "Mybuddy",
+    }
+    
+    base_payload = {
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": 500,
+        "temperature": 0.7,
+    }
+    
+    # Try each model until one works
+    for model in models_to_try:
+        try:
+            payload = {**base_payload, "model": model}
+            
+            # ✅ FIXED: print, not rint
+            print(f"🤖 Trying model: {model}")
+            
+            r = requests.post(url, headers=headers, json=payload, timeout=25)
+            
+            # Handle rate limit (429) - try next model
+            if r.status_code == 429:
+                print(f"⚠️ Rate limited on {model}, trying next...")
+                continue
+            
+            # Handle other errors
+            if r.status_code != 200:
+                print(f"⚠️ {model} returned {r.status_code}: {r.text[:150]}")
+                continue
+            
+            data = r.json()
+            
+            if "choices" in data and data["choices"]:
+                print(f"✅ Got response from {model}")
+                return data["choices"][0]["message"]["content"].strip()
+                
+        except requests.exceptions.Timeout:
+            print(f"⏱️ Timeout on {model}, trying next...")
+            continue
+        except Exception as e:
+            print(f"⚠️ Error on {model}: {type(e).__name__}, trying next...")
+            continue
+    
+    # All models failed
+    print("❌ All AI models failed")
+    return "Sorry, all AI services are busy right now. Please try again in a minute! 🙏"
 
 
 # ---------- Supabase Memory ----------
@@ -135,7 +162,7 @@ def handle_message(update: Update):
 def root():
     """Health check root endpoint"""
     return {
-        "status": "✅ Sawan Buddy is running!",
+        "status": "✅ Mybuddy is running!",
         "model": MODEL,
         "webhook": "/webhook",
         "docs": "/docs"
@@ -174,7 +201,7 @@ def health_check():
     except Exception as e:
         results["services"]["telegram"] = f"BLOCKED: {type(e).__name__}"
     
-    # Test OpenRouter API
+    # Test OpenRouter API - ✅ FIXED: no trailing spaces
     try:
         r = requests.get(
             "https://openrouter.ai/api/v1/models",
@@ -204,14 +231,4 @@ def debug_info():
     """Debug endpoint for troubleshooting"""
     return {
         "env_vars": {
-            "TELEGRAM_BOT_TOKEN": "✓ set" if TELEGRAM_BOT_TOKEN else "✗ missing",
-            "OPENROUTER_API_KEY": "✓ set" if OPENROUTER_API_KEY else "✗ missing",
-            "SUPABASE_URL": "✓ set" if SUPABASE_URL else "✗ missing",
-            "SUPABASE_KEY": "✓ set" if SUPABASE_KEY else "✗ missing",
-        },
-        "config": {
-            "MODEL": MODEL,
-            "SYSTEM_PROMPT_LENGTH": len(SYSTEM_PROMPT),
-        },
-        "render_url": os.getenv("RENDER_EXTERNAL_URL", "not set"),
-    }
+            "TELEGRAM
