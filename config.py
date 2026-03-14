@@ -9,9 +9,13 @@ def env(key: str, required: bool = False) -> str:
     return val
 
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", required=True)
-HF_TOKEN = env("HF_TOKEN", required=True)  # ← Hugging Face token
+HF_TOKEN = env("HF_TOKEN", required=True)
 SUPABASE_URL = env("SUPABASE_URL", required=True)
 SUPABASE_KEY = env("SUPABASE_KEY", required=True)
 
-HF_MODEL = "Qwen/Qwen2.5-7B-Instruct"
-SYSTEM_PROMPT = "You are Mybuddy, a friendly and concise Telegram AI assistant."
+# Working free models:
+HF_MODEL = "microsoft/Phi-3-mini-4k-instruct"
+# Alternative: HF_MODEL = "google/gemma-2-9b-it"
+# Alternative: HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"
+
+SYSTEM_PROMPT = "You are Mybuddy, a friendly Telegram AI assistant. Keep replies short and helpful."
