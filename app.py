@@ -17,7 +17,7 @@ SUPABASE_TABLE = "chat_logs"
 TG_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 
-def tg_post(method: str, data: dict):
+def tg_post(method: str,  dict):
     url = f"{TG_API}/{method}"
     try:
         r = requests.post(url, json=data, timeout=15)
@@ -32,43 +32,35 @@ def send_message(chat_id: int, text: str):
 
 def ask_huggingface(prompt: str) -> str:
     try:
-        url = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
+        url = f"https://router.huggingface.co/{HF_MODEL}/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {HF_TOKEN}",
             "Content-Type": "application/json"
         }
-        
-        # Simple prompt format that works with most instruct models
-        full_prompt = f"{SYSTEM_PROMPT}\n\nUser: {prompt}\nAssistant:"
-        
         payload = {
-            "inputs": full_prompt,
-            "parameters": {
-                "max_new_tokens": 500,
-                "temperature": 0.7,
-                "return_full_text": False,
-                "do_sample": True
-            },
-            "options": {"wait_for_model": True}
+            "model": HF_MODEL,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 500,
+            "temperature": 0.7
         }
-        
         r = requests.post(url, headers=headers, json=payload, timeout=30)
-        
         if r.status_code == 200:
-            result = r.json()
-            if isinstance(result, list) and len(result) > 0:
-                text = result[0].get("generated_text", "")
-                return text.strip()
-            elif isinstance(result, dict) and "generated_text" in result:
-                return result["generated_text"].strip()
-        
-        # Handle model loading
-        if r.status_code == 503:
-            return "AI is warming up. Please try again in 20 seconds."
-        
+            data = r.json()
+            if data.get("choices") and data["choices"][0].get("message"):
+                return data["choices"][0]["message"]["content"].strip()
+        if r.status_code == 401:
+            return "AI auth error."
+        elif r.status_code == 404:
+            return "Model not found."
+        elif r.status_code == 429:
+            return "AI is busy. Wait 30s."
+        elif r.status_code == 503:
+            return "AI loading. Try again."
         print(f"HF Error {r.status_code}: {r.text[:200]}")
-        return "AI service unavailable. Try again later."
-        
+        return "AI unavailable."
     except Exception as e:
         print(f"HF Exception: {e}")
         return "AI temporarily unavailable."
@@ -77,12 +69,7 @@ def ask_huggingface(prompt: str) -> str:
 def save_memory(user_text: str, bot_reply: str):
     try:
         url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}"
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal",
-        }
+        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=minimal"}
         requests.post(url, headers=headers, json={"user_message": user_text, "bot_reply": bot_reply}, timeout=10)
     except:
         pass
