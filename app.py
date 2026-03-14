@@ -32,38 +32,19 @@ def send_message(chat_id: int, text: str):
 
 
 def ask_huggingface(prompt: str) -> str:
+    """Call Hugging Face Inference API - working endpoint"""
     try:
-        # ✅ New Hugging Face router endpoint
-        url = f"https://router.huggingface.co/{HF_MODEL}/v1/chat/completions"
+        # ✅ Working endpoint for chat models
+        url = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
         
         headers = {
             "Authorization": f"Bearer {HF_TOKEN}",
             "Content-Type": "application/json"
         }
         
+        # Format for chat/instruct models
         payload = {
-            "model": HF_MODEL,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 500,
-            "temperature": 0.7
-        }
-        
-        r = requests.post(url, headers=headers, json=payload, timeout=30)
-        
-        if r.status_code == 200:
-            data = r.json()
-            if data.get("choices"):
-                return data["choices"][0]["message"]["content"].strip()
-        
-        print(f"HF Error {r.status_code}: {r.text[:200]}")
-        return "AI is busy. Please try again."
-        
-    except Exception as e:
-        print(f"HF Exception: {e}")
-        return "AI temporarily unavailable."
+            "inputs": f"
 
 
 def save_memory(user_text: str, bot_reply: str):
