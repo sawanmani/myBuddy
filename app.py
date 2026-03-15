@@ -18,7 +18,7 @@ HF_MODEL = os.environ.get("HF_MODEL", "meta-llama/Llama-3.2-1B-Instruct").strip(
 SYSTEM_PROMPT = "You are a helpful assistant. Keep responses short."
 
 # ✅ Add your IDs here. Example: [8494923985, 123456789]
-ALLOWED_USER_IDS = [8494923985] 
+ALLOWED_USER_IDS = [8494923985,8485103123] 
 
 app = FastAPI()
 TG_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
