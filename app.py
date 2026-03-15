@@ -23,10 +23,11 @@ ALLOWED_USER_IDS = [8494923985, 8485103123]
 # ✅ MODEL POOL: Your list of free, uncensored models
 # The bot will pick one at random for every message
 MODEL_POOL = [
-    "NousResearch/Hermes-3-Llama-3.2-3B",
-    "cognitivecomputations/dolphin-2.9.4-llama-3-8b",
-    "mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated",
-    "HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive"
+    "meta-llama/Llama-3.2-3B-Instruct",
+    "meta-llama/Llama-3.2-1B-Instruct",
+    "Qwen/Qwen2.5-7B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "google/gemma-2-2b-it"
 ]
 
 app = FastAPI()
@@ -34,43 +35,49 @@ TG_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 HF_ROUTER_URL = "https://router.huggingface.co/v1/chat/completions"
 
 def get_ai_reply(prompt):
-    # ✅ RANDOM SELECTION LOGIC
-    chosen_model = random.choice(MODEL_POOL)
+    # Make a copy of the pool so we can remove failed models during retries
+    available_models = MODEL_POOL.copy()
     
-    headers = {
-        "Authorization": f"Bearer {HF_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": chosen_model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 500,
-        "temperature": 0.8
-    }
+    # Try up to 3 different models if errors occur
+    for attempt in range(3):
+        chosen_model = random.choice(available_models)
+        
+        headers = {
+            "Authorization": f"Bearer {HF_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": chosen_model,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 500,
+            "temperature": 0.8
+        }
 
-    try:
-        # Log which model was picked for this specific request
-        logger.info(f"🤖 Selected Model: {chosen_model}")
-        
-        r = requests.post(HF_ROUTER_URL, headers=headers, json=payload, timeout=30)
-        
-        if r.status_code == 200:
-            data = r.json()
-            ai_text = data["choices"][0]["message"]["content"].strip()
+        try:
+            logger.info(f"🤖 Attempt {attempt+1}: Trying {chosen_model}")
+            r = requests.post(HF_ROUTER_URL, headers=headers, json=payload, timeout=20)
             
-            # ✅ APPEND MODEL NAME TO REPLY (Simplified display name)
-            model_display = chosen_model.split('/')[-1]
-            return f"{ai_text}\n\n🤖 <b>Model:</b> {model_display}"
-        
-        logger.error(f"📡 AI Error {r.status_code}: {r.text}")
-        return f"AI Service Error ({r.status_code})"
+            if r.status_code == 200:
+                data = r.json()
+                ai_text = data["choices"][0]["message"]["content"].strip()
+                model_name = chosen_model.split('/')[-1]
+                return f"{ai_text}\n\n🤖 <b>Model:</b> {model_name}"
             
-    except Exception as e:
-        logger.error(f"❌ AI Exception: {e}")
-        return "I can't reach my brain right now."
+            # If it fails, log it and remove from local list for this request
+            logger.error(f"📡 Model {chosen_model} failed ({r.status_code})")
+            available_models.remove(chosen_model)
+            if not available_models:
+                break
+                
+        except Exception as e:
+            logger.error(f"❌ Connection error with {chosen_model}: {e}")
+            if chosen_model in available_models:
+                available_models.remove(chosen_model)
+
+    return "❌ All models are currently busy or unavailable. Please try again in a moment."
 
 @app.post("/webhook")
 async def webhook(req: Request):
