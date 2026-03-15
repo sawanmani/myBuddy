@@ -1,74 +1,58 @@
+import os
 import requests
 from fastapi import FastAPI, Request
 from telegram import Update
-import os
 
-# Load env vars
+# 1. Load env vars
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
 HF_MODEL = os.environ.get("HF_MODEL", "meta-llama/Llama-3.2-1B-Instruct").strip()
-SYSTEM_PROMPT = "You are a helpful assistant. Keep responses concise."
+SYSTEM_PROMPT = "Be short and helpful."
 
 app = FastAPI()
 TG_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
-# FIX: Standard Hugging Face Inference API URL
-# Pattern: https://api-inference.huggingface.co/models/<MODEL_ID>
-HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL}/v1/chat/completions"
-
-print(f"🚀 Starting with model: {HF_MODEL}")
-
-def send_telegram(chat_id, text):
-    try:
-        r = requests.post(
-            f"{TG_API}/sendMessage",
-            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-            timeout=15
-        )
-        return r.status_code == 200
-    except Exception as e:
-        print(f"❌ Telegram exception: {e}")
-        return False
+# 2. ✅ FIXED: The modern 2026 Router URL
+# We use the generic chat completions endpoint and specify the model in the payload
+HF_ROUTER_URL = "https://router.huggingface.co/hf-inference/v1/chat/completions"
 
 def get_ai_reply(prompt):
-    print(f"🤖 Calling HF API: {HF_API_URL}")
-    
     headers = {
         "Authorization": f"Bearer {HF_TOKEN}",
         "Content-Type": "application/json"
     }
     
+    # 3. The Router needs the model name inside the JSON body
     payload = {
         "model": HF_MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 500
+        "max_tokens": 300,
+        "stream": False
     }
 
     try:
-        r = requests.post(HF_API_URL, headers=headers, json=payload, timeout=30)
+        print(f"🤖 Calling HF Router for: {HF_MODEL}")
+        r = requests.post(HF_ROUTER_URL, headers=headers, json=payload, timeout=30)
         
         if r.status_code == 200:
             data = r.json()
             return data["choices"][0]["message"]["content"].strip()
         
-        # Handle specific HF statuses
-        error_map = {
-            401: "AI Auth Error: Check your HF_TOKEN.",
-            404: f"Model '{HF_MODEL}' not found. Check the model ID.",
-            429: "AI is rate-limited. Please try again in a minute.",
-            503: "AI is currently loading/booting up. Try again in 30s."
-        }
+        # Specific error handling for the new router
+        print(f"📡 Router Error {r.status_code}: {r.text}")
+        if r.status_code == 401: return "Auth Error: Check HF_TOKEN."
+        if r.status_code == 404: return "Model not found on Router."
+        if r.status_code == 429: return "Rate limited. Wait a moment."
+        if r.status_code == 503: return "Model is loading. Try again in 30s."
         
-        error_msg = error_map.get(r.status_code, f"AI Error ({r.status_code})")
-        print(f"📡 HF Response Error: {r.status_code} - {r.text}")
-        return error_msg
+        return f"AI Error: {r.status_code}"
             
     except Exception as e:
-        print(f"❌ HF exception: {e}")
-        return "Sorry, I'm having trouble thinking right now."
+        print(f"❌ Exception: {e}")
+        return "Connection to AI failed."
 
 @app.post("/webhook")
 async def webhook(req: Request):
@@ -77,22 +61,19 @@ async def webhook(req: Request):
         update = Update.de_json(data, None)
         
         if update and update.message and update.message.text:
-            user_text = update.message.text
             chat_id = update.message.chat.id
+            user_text = update.message.text
             
-            # Get AI response
+            # Get AI response and send back to Telegram
             reply = get_ai_reply(user_text)
-            send_telegram(chat_id, reply)
+            requests.post(f"{TG_API}/sendMessage", 
+                         json={"chat_id": chat_id, "text": reply})
             
         return {"ok": True}
     except Exception as e:
-        print(f"❌ Webhook error: {e}")
+        print(f"Webhook Error: {e}")
         return {"ok": False}
 
 @app.get("/")
-def root():
+def home():
     return {"status": "online", "model": HF_MODEL}
-
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
